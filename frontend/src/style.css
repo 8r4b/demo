@@ -1,0 +1,548 @@
+/* Custom CSS for Video Face Recognition System - Refined Edition */
+
+/* General Body & Font Styling */
+body {
+    font-family: 'Inter', sans-serif; /* Default font */
+    line-height: 1.6;
+    color: #333;
+    background: linear-gradient(135deg, #e0f7fa, #e8f5e9); /* Very light blue to very light green for a soft background */
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 0; /* Add padding for smaller screens */
+    overflow-x: hidden; /* Prevent horizontal scroll */
+}
+
+/* Heading Font */
+h1, h2, h3, h4, h5, h6 {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 700;
+}
+
+/* Main Container */
+.main-container {
+    background-color: rgba(255, 255, 255, 0.98); /* Near-white background */
+    backdrop-filter: blur(10px); /* Stronger frosted glass effect */
+    border-radius: 1.75rem; /* Even more rounded corners */
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.2); /* Deeper, softer shadow */
+    border: 1px solid rgba(255, 255, 255, 0.8); /* More subtle white border */
+    animation: fadeIn 0.8s ease-out forwards; /* Fade in animation */
+}
+
+/* Global Fade In Animation */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Main Heading Gradient */
+.heading-gradient {
+    color: transparent; /* Make text transparent */
+    background-image: linear-gradient(45deg, #1a237e, #4a148c); /* Deep indigo to deep purple */
+    -webkit-background-clip: text; /* Clip background to text */
+    background-clip: text;
+    position: relative;
+    padding-bottom: 1rem; /* Space for the underline */
+}
+.heading-gradient::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100px; /* Underline width */
+    height: 5px;
+    background: linear-gradient(90deg, #3f51b5, #673ab7); /* Indigo to deep purple underline */
+    border-radius: 2.5px;
+}
+
+/* Fancy Card Styling */
+.card-fancy {
+    background-color: #ffffff;
+    border-radius: 1.25rem; /* Consistent rounded corners */
+    box-shadow: 0 12px 25px rgba(0, 0, 0, 0.1); /* Soft shadow */
+    overflow: hidden;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.card-fancy:hover {
+    transform: translateY(-7px);
+    box-shadow: 0 18px 35px rgba(0, 0, 0, 0.15);
+}
+
+/* Card Header Styling */
+.card-header-fancy {
+    padding: 1.75rem;
+    color: white;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.3); /* Lighter border */
+    position: relative; /* For potential header effects */
+    z-index: 1;
+}
+.card-header-fancy .bi {
+    font-size: 1.8rem;
+    margin-right: 0.75rem;
+}
+/* Specific header gradients */
+.card-header-fancy.bg-blue-600 {
+    background: linear-gradient(45deg, #2196f3, #1976d2); /* Brighter blue to darker blue */
+}
+.card-header-fancy.bg-purple-600 {
+    background: linear-gradient(45deg, #9c27b0, #7b1fa2); /* Brighter purple to darker purple */
+}
+
+
+/* Input Fields & Textareas */
+.form-control-fancy {
+    border: 1px solid #c7d2fe; /* Very light blue border */
+    border-radius: 0.85rem; /* More rounded */
+    padding: 0.8rem 1.1rem;
+    font-size: 1.05rem;
+    width: 100%;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease;
+    background-color: #fcfdfe; /* Off-white background */
+    color: #4a4a4a;
+}
+.form-control-fancy:focus {
+    outline: none;
+    border-color: #6366f1; /* Indigo focus */
+    box-shadow: 0 0 0 5px rgba(99, 102, 241, 0.3); /* Indigo glow */
+    background-color: #ffffff;
+}
+/* File input specific styling */
+input[type="file"].form-control-fancy {
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+}
+
+/* Primary Button (Process Video) */
+.btn-primary {
+    background: linear-gradient(45deg, #3f51b5, #673ab7); /* Indigo to deep purple gradient */
+    color: white;
+    font-weight: 600;
+    padding: 0.95rem 1.75rem;
+    border-radius: 0.95rem;
+    transition: all 0.3s ease;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 20px rgba(63, 81, 181, 0.35);
+    font-size: 1.1rem;
+}
+.btn-primary:hover {
+    background: linear-gradient(45deg, #303f9f, #512da8); /* Darker gradient on hover */
+    box-shadow: 0 12px 25px rgba(63, 81, 181, 0.45);
+    transform: translateY(-3px);
+}
+.btn-primary:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(63, 81, 181, 0.3); /* Softer shadow on click */
+}
+
+/* Gradient Button for "Add Known Face" - adjusted colors */
+.btn-gradient-purple {
+    background: linear-gradient(45deg, #673ab7, #9c27b0); /* Deeper purple to a slightly different purple */
+    color: white;
+    font-weight: 600;
+    padding: 0.95rem 1.75rem;
+    border-radius: 0.95rem;
+    transition: all 0.3s ease;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 20px rgba(103, 58, 183, 0.35);
+    font-size: 1.1rem;
+}
+.btn-gradient-purple:hover {
+    background: linear-gradient(45deg, #512da8, #7b1fa2); /* Darker gradient on hover */
+    box-shadow: 0 12px 25px rgba(103, 58, 183, 0.45);
+    transform: translateY(-3px);
+}
+.btn-gradient-purple:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(103, 58, 183, 0.3); /* Softer shadow on click */
+}
+
+/* Save Button in Modal */
+.btn-save-fancy {
+    background: linear-gradient(90deg, #2196f3, #1976d2); /* Blue gradient */
+    color: white;
+    font-weight: 500;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0 0.85rem 0.85rem 0; /* Only right corners rounded */
+    border: none;
+    transition: background 0.3s ease, transform 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.3); /* Inner highlight */
+}
+.btn-save-fancy:hover {
+    background: linear-gradient(90deg, #1976d2, #1565c0); /* Slightly darker on hover */
+    transform: translateX(3px); /* Slight movement */
+}
+.btn-save-fancy:active {
+    transform: translateY(0);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.3), 0 1px 8px rgba(0,0,0,0.2); /* Add outer shadow on click */
+}
+
+
+/* Status Message */
+.status-message {
+    padding: 1rem 1.25rem;
+    border-radius: 0.75rem;
+    font-weight: 500;
+    background-color: #e3f2fd; /* Light blue background */
+    color: #1565c0; /* Darker blue text */
+    text-align: center;
+    box-shadow: inset 0 1px 4px rgba(0,0,0,0.08);
+}
+.status-message.text-green-600 {
+    background-color: #e8f5e9; /* Light green */
+    color: #2e7d32; /* Dark green */
+}
+.status-message.text-red-600 {
+    background-color: #ffebee; /* Light red */
+    color: #c62828; /* Dark red */
+}
+
+/* Video Player */
+#videoPlayer {
+    min-height: 350px; /* Taller player */
+    background-color: #000;
+    border-radius: 1.25rem; /* More rounded */
+    box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.4); /* Deeper inner shadow for depth */
+}
+
+/* Timeline */
+.timeline-bar {
+    height: 50px; /* Taller timeline */
+    background: linear-gradient(90deg, #e0e0e0, #f0f0f0); /* Subtle gradient */
+    border-radius: 25px; /* Pill shape */
+    border: 2px solid #bdbdbd; /* Slightly darker border */
+    position: relative;
+    overflow: hidden;
+}
+.timeline-playhead {
+    position: absolute;
+    top: 0;
+    left: var(--playhead-position, 0%); /* Controlled by JS */
+    width: 5px;
+    height: 100%;
+    background-color: #ef5350; /* Bright coral red */
+    border-radius: 2.5px;
+    z-index: 20;
+    pointer-events: none; /* Make it non-interactive */
+    transition: left 0.1s linear; /* Smooth playhead movement */
+}
+
+
+/* Timeline Markers */
+.timeline-marker {
+    position: absolute;
+    top: 0;
+    width: 4px; /* Thicker lines */
+    height: 100%;
+    background-color: #2196f3; /* Blue for general detections */
+    z-index: 10;
+    transition: transform 0.2s ease, background-color 0.2s ease, width 0.2s ease;
+    cursor: pointer;
+    border-radius: 2px;
+}
+.timeline-marker:hover {
+    background-color: #1976d2; /* Darker blue on hover */
+    width: 6px; /* Thicker on hover */
+    transform: scaleY(1.1); /* Slightly taller */
+}
+.timeline-marker[data-face-id] {
+    background-color: #ffb300; /* Amber for specific faces */
+}
+.timeline-marker[data-face-id]:hover {
+    background-color: #fb8c00; /* Darker amber on hover */
+}
+
+
+/* Faces Grid (Detected Faces) */
+.faces-grid {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); /* Larger face cards */
+    gap: 1.5rem;
+    max-height: 520px; /* Adjust height as needed */
+    overflow-y: auto;
+    padding-right: 1rem; /* Space for scrollbar */
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+}
+
+.face-card {
+    background-color: #ffffff;
+    border-radius: 1.25rem; /* More rounded */
+    border: 1px solid #e0e0e0;
+    padding: 1rem;
+    text-align: center;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    box-shadow: 0 6px 15px rgba(0,0,0,0.08);
+}
+.face-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.12);
+    border-color: #6366f1; /* Indigo border on hover */
+}
+.face-card img {
+    width: 100px; /* Larger image */
+    height: 100px;
+    object-fit: cover;
+    border-radius: 50%; /* Circular */
+    margin: 0 auto 1rem auto;
+    border: 4px solid #818cf8; /* Light indigo border */
+    box-shadow: 0 3px 8px rgba(0,0,0,0.2); /* Subtle image shadow */
+    transition: border-color 0.2s ease;
+}
+.face-card:hover img {
+    border-color: #4f46e5; /* Darker indigo on hover */
+}
+.face-card p {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #4a4a4a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 0.25rem;
+}
+
+/* Known Faces List */
+#knownFacesContainer {
+    max-height: 300px; /* Adjusted height */
+    overflow-y: auto;
+    padding-right: 1rem;
+}
+
+.known-face-item {
+    display: flex;
+    align-items: center;
+    padding: 1rem;
+    background-color: #f0f4f8; /* Light blue-gray background */
+    border: 1px solid #d9e2ec;
+    border-radius: 1rem; /* More rounded */
+    box-shadow: 0 3px 10px rgba(0,0,0,0.06);
+    transition: transform 0.2s ease, background-color 0.2s ease;
+}
+.known-face-item:hover {
+    transform: translateX(7px);
+    background-color: #e3f2fd; /* Very light blue on hover */
+}
+.known-face-item img {
+    width: 55px; /* Slightly larger known face images */
+    height: 55px;
+    object-fit: cover;
+    border-radius: 50%;
+    margin-right: 1.25rem;
+    border: 3px solid #b39ddb; /* Medium purple border */
+    flex-shrink: 0; /* Prevent image from shrinking */
+}
+.known-face-item span {
+    font-weight: 500;
+    color: #4a4a4a;
+    flex-grow: 1; /* Allow name to take available space */
+}
+
+/* Modal Overrides & Enhancements */
+.modal-content {
+    border-radius: 1.75rem; /* Very rounded */
+    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.3); /* Deeper shadow */
+    overflow: hidden; /* Ensure rounded corners clip content */
+}
+.modal-header {
+    position: relative;
+    padding: 1.75rem 1.75rem 2.25rem 1.75rem; /* Adjust padding for blob */
+    overflow: hidden; /* For the blob */
+    border-bottom: none;
+}
+.modal-title {
+    font-family: 'Montserrat', sans-serif;
+    position: relative;
+    z-index: 2; /* Keep title above blob */
+    font-size: 1.75rem;
+}
+.btn-close-fancy {
+    background: none;
+    border: none;
+    font-size: 2.25rem; /* Larger close button */
+    color: white;
+    opacity: 1;
+    position: relative;
+    z-index: 2;
+    transition: transform 0.3s ease;
+}
+.btn-close-fancy:hover {
+    transform: rotate(180deg); /* Full spin on hover */
+}
+.modal-header-blob {
+    position: absolute;
+    top: -60px; /* Adjust as needed */
+    right: -60px; /* Adjust as needed */
+    width: 180px;
+    height: 180px;
+    background: rgba(255, 255, 255, 0.2); /* Semi-transparent white blob */
+    border-radius: 50%;
+    transform: rotate(-45deg);
+    z-index: 1;
+    animation: pulse 4s infinite alternate ease-in-out;
+}
+
+@keyframes pulse {
+    from { transform: scale(0.9) rotate(-45deg); opacity: 0.2; }
+    to { transform: scale(1.1) rotate(-45deg); opacity: 0.35; }
+}
+
+
+.modal-body {
+    background-color: #fafafa; /* Very light background for body */
+    padding: 2.25rem;
+    border-bottom-left-radius: 1.75rem;
+    border-bottom-right-radius: 1.75rem;
+}
+.modal-face-img {
+    width: 180px;
+    height: 180px;
+    object-fit: cover;
+    border-radius: 50%;
+    border: 6px solid; /* Solid border to be filled with gradient */
+    border-image: linear-gradient(45deg, #2196f3, #3f51b5, #673ab7) 1; /* Blue to purple gradient border */
+    box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.modal-face-img:hover {
+    transform: scale(1.05);
+    box-shadow: 0 15px 35px rgba(0,0,0,0.35);
+}
+
+.list-group-fancy {
+    background-color: #ffffff;
+    border: 1px solid #e0e0e0;
+    border-radius: 1rem;
+    padding: 0.75rem;
+    box-shadow: inset 0 2px 8px rgba(0,0,0,0.05);
+}
+.list-group-item-fancy {
+    padding: 1rem 1.25rem;
+    border-radius: 0.75rem;
+    margin-bottom: 0.35rem;
+    transition: background-color 0.2s ease, transform 0.2s ease;
+    cursor: pointer;
+    display: block; /* Make it a block for full click area */
+    font-size: 1.05rem;
+    color: #4a4a4a;
+    font-weight: 500;
+}
+.list-group-item-fancy:hover {
+    background-color: #e3f2fd; /* Lightest blue on hover */
+    transform: translateX(8px);
+}
+/* No bottom margin for the last item */
+.list-group-item-fancy:last-child {
+    margin-bottom: 0;
+}
+
+
+/* Scrollbar Styling (Webkit) */
+::-webkit-scrollbar {
+    width: 12px;
+    height: 12px; /* For horizontal scrollbars */
+}
+
+::-webkit-scrollbar-track {
+    background: #f5f5f5;
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #9e9e9e; /* Gray */
+    border-radius: 10px;
+    border: 3px solid #f5f5f5; /* Makes the thumb thinner visually */
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #757575; /* Darker gray on hover */
+}
+
+/* Responsive Adjustments */
+@media (max-width: 1023px) { /* Adjust for smaller screens (lg breakpoint) */
+    .main-container {
+        padding: 1rem;
+        border-radius: 1.25rem;
+    }
+    h1.heading-gradient {
+        font-size: 3.5rem; /* Smaller heading */
+        margin-bottom: 2.5rem;
+    }
+    .card-fancy {
+        margin-bottom: 1.75rem;
+    }
+    .faces-grid {
+        grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); /* Smaller grid for mobile */
+        gap: 1rem;
+    }
+    .face-card img {
+        width: 80px;
+        height: 80px;
+    }
+    .card-header-fancy {
+        padding: 1.25rem;
+        font-size: 1.15rem;
+    }
+    .card-header-fancy .bi {
+        font-size: 1.6rem;
+    }
+    .modal-body {
+        padding: 1.75rem;
+    }
+    .modal-face-img {
+        width: 140px;
+        height: 140px;
+    }
+}
+
+@media (max-width: 767px) { /* Adjust for even smaller screens (md breakpoint) */
+    body {
+        padding: 1rem 0;
+    }
+    h1.heading-gradient {
+        font-size: 2.75rem; /* Even smaller heading */
+    }
+    .faces-grid {
+        grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+    }
+    .face-card img {
+        width: 70px;
+        height: 70px;
+    }
+    .btn-primary, .btn-gradient-purple {
+        padding: 0.75rem 1.25rem;
+        font-size: 1rem;
+    }
+    .form-control-fancy {
+        padding: 0.6rem 0.9rem;
+        font-size: 0.9rem;
+    }
+    .modal-title {
+        font-size: 1.5rem;
+    }
+    .btn-close-fancy {
+        font-size: 2rem;
+    }
+}
+/* Cache busting comment for Railway. Increment to force full CSS rebuild on change. */
+/* #cache_bust_v3 */
