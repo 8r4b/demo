@@ -1,0 +1,318 @@
+{
+  "video_info": {
+    "fps": 60.0,
+    "total_frames": 705,
+    "resolution": "1280x720",
+    "duration_seconds": 11.75
+  },
+  "detections": [
+    {
+      "frame": 0,
+      "time": 0.0,
+      "face_id": "3jX7jO2e",
+      "location": [
+        733,
+        307,
+        43,
+        50
+      ]
+    },
+    {
+      "frame": 30,
+      "time": 0.5,
+      "face_id": "3jX7jO2e",
+      "location": [
+        728,
+        318,
+        43,
+        49
+      ]
+    },
+    {
+      "frame": 59,
+      "time": 1.0,
+      "face_id": "3jX7jO2e",
+      "location": [
+        734,
+        329,
+        46,
+        51
+      ]
+    },
+    {
+      "frame": 90,
+      "time": 1.5,
+      "face_id": "3jX7jO2e",
+      "location": [
+        751,
+        356,
+        51,
+        57
+      ]
+    },
+    {
+      "frame": 90,
+      "time": 1.5,
+      "face_id": "4g5lG7i",
+      "location": [
+        773,
+        47,
+        42,
+        54
+      ]
+    },
+    {
+      "frame": 120,
+      "time": 2.0,
+      "face_id": "2nL4NB2B",
+      "location": [
+        312,
+        112,
+        46,
+        58
+      ]
+    },
+    {
+      "frame": 269,
+      "time": 4.5,
+      "face_id": "2Oy8OC6",
+      "location": [
+        247,
+        102,
+        124,
+        169
+      ]
+    },
+    {
+      "frame": 269,
+      "time": 4.5,
+      "face_id": "3XP8pa",
+      "location": [
+        574,
+        143,
+        117,
+        180
+      ]
+    },
+    {
+      "frame": 300,
+      "time": 5.0,
+      "face_id": "2Oy8OC6",
+      "location": [
+        245,
+        86,
+        126,
+        170
+      ]
+    },
+    {
+      "frame": 300,
+      "time": 5.0,
+      "face_id": "3XP8pa",
+      "location": [
+        562,
+        152,
+        114,
+        182
+      ]
+    },
+    {
+      "frame": 330,
+      "time": 5.5,
+      "face_id": "3XP8pa",
+      "location": [
+        560,
+        102,
+        235,
+        310
+      ]
+    },
+    {
+      "frame": 330,
+      "time": 5.5,
+      "face_id": "fN2FP0B",
+      "location": [
+        1062,
+        602,
+        122,
+        109
+      ]
+    },
+    {
+      "frame": 360,
+      "time": 6.0,
+      "face_id": "3XP8pa",
+      "location": [
+        567,
+        104,
+        239,
+        306
+      ]
+    },
+    {
+      "frame": 390,
+      "time": 6.5,
+      "face_id": "1sT0GX",
+      "location": [
+        1163,
+        66,
+        44,
+        60
+      ]
+    },
+    {
+      "frame": 420,
+      "time": 7.0,
+      "face_id": "1sT0GX",
+      "location": [
+        1170,
+        76,
+        42,
+        60
+      ]
+    },
+    {
+      "frame": 450,
+      "time": 7.5,
+      "face_id": "1sT0GX",
+      "location": [
+        1177,
+        90,
+        41,
+        58
+      ]
+    },
+    {
+      "frame": 480,
+      "time": 8.0,
+      "face_id": "3XP8pa",
+      "location": [
+        514,
+        261,
+        167,
+        144
+      ]
+    },
+    {
+      "frame": 510,
+      "time": 8.5,
+      "face_id": "3XP8pa",
+      "location": [
+        514,
+        221,
+        165,
+        150
+      ]
+    },
+    {
+      "frame": 540,
+      "time": 9.0,
+      "face_id": "3XP8pa",
+      "location": [
+        469,
+        288,
+        159,
+        231
+      ]
+    },
+    {
+      "frame": 570,
+      "time": 9.5,
+      "face_id": "3XP8pa",
+      "location": [
+        463,
+        291,
+        159,
+        224
+      ]
+    },
+    {
+      "frame": 599,
+      "time": 10.0,
+      "face_id": "3XP8pa",
+      "location": [
+        490,
+        134,
+        78,
+        117
+      ]
+    },
+    {
+      "frame": 629,
+      "time": 10.5,
+      "face_id": "3XP8pa",
+      "location": [
+        505,
+        145,
+        79,
+        115
+      ]
+    },
+    {
+      "frame": 659,
+      "time": 11.0,
+      "face_id": "3XP8pa",
+      "location": [
+        550,
+        180,
+        75,
+        133
+      ]
+    },
+    {
+      "frame": 689,
+      "time": 11.5,
+      "face_id": "3XP8pa",
+      "location": [
+        552,
+        172,
+        72,
+        131
+      ]
+    }
+  ],
+  "unique_faces": [
+    {
+      "id": "3jX7jO2e",
+      "name": "Michael Choice",
+      "image_path": "faces/celebrity_3jX7jO2e.jpg",
+      "is_celebrity": true
+    },
+    {
+      "id": "4g5lG7i",
+      "name": "Dick Warlock",
+      "image_path": "faces/celebrity_4g5lG7i.jpg",
+      "is_celebrity": true
+    },
+    {
+      "id": "2nL4NB2B",
+      "name": "Richard Cabral",
+      "image_path": "faces/celebrity_2nL4NB2B.jpg",
+      "is_celebrity": true
+    },
+    {
+      "id": "2Oy8OC6",
+      "name": "Luis Su\u00e1rez",
+      "image_path": "faces/celebrity_2Oy8OC6.jpg",
+      "is_celebrity": true
+    },
+    {
+      "id": "3XP8pa",
+      "name": "Lionel Messi",
+      "image_path": "faces/celebrity_3XP8pa.jpg",
+      "is_celebrity": true
+    },
+    {
+      "id": "fN2FP0B",
+      "name": "Alex Silvagni",
+      "image_path": "faces/celebrity_fN2FP0B.jpg",
+      "is_celebrity": true
+    },
+    {
+      "id": "1sT0GX",
+      "name": "Harry Winks",
+      "image_path": "faces/celebrity_1sT0GX.jpg",
+      "is_celebrity": true
+    }
+  ]
+}

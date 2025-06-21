@@ -1,7 +1,7 @@
-opencv-python
-numpy
+boto3
 fastapi
 uvicorn[standard]
 python-multipart
-boto3
 python-dotenv
+opencv-python # Required for cv2 video metadata reading
+numpy # Required for numpy operations with cv2

@@ -25,6 +25,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -53,9 +54,11 @@ DATA_DIR = BASE_DIR / "data"
 KNOWN_FACES_DIR = BASE_DIR / "known_faces"
 TEMP_VIDEO_DIR = DATA_DIR / "temp_videos"
 FACES_SAVE_DIR = DATA_DIR / "faces"
+FRONTEND_BUILD_DIR = BASE_DIR / "frontend" / "build"
 
 for directory in [DATA_DIR, KNOWN_FACES_DIR, TEMP_VIDEO_DIR, FACES_SAVE_DIR]:
     directory.mkdir(parents=True, exist_ok=True)
+    print(f"Created/verified directory: {directory}")
 
 @app.on_event("startup")
 async def create_rekognition_collection():
@@ -116,28 +119,81 @@ async def upload_video_endpoint(file: UploadFile = File(...)):
 
         current_frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         current_frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        video_fps = cap.get(cv2.CAP_PROP_FPS)
 
         for item in rekognition_results['Celebrities']:
             timestamp = item['Timestamp'] / 1000.0
             celebrity = item['Celebrity']
             celeb_id = celebrity['Id']
             celeb_name = celebrity['Name']
-
-            celeb_image_url = "https://placehold.co/128x128/3b82f6/ffffff?text=Recognized"
-
+            
+            # Get face bounding box from Rekognition
+            face_box = celebrity.get('Face', {}).get('BoundingBox', {})
+            
+            # Extract face image if we haven't saved one for this celebrity yet
+            celeb_image_path = f"faces/celebrity_{celeb_id}.jpg"
+            
             if celeb_id not in unique_celebrities:
+                # Calculate frame number from timestamp
+                frame_number = int(timestamp * video_fps)
+                
+                # Set video position to the frame where celebrity was detected
+                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+                ret, frame = cap.read()
+                
+                if ret and face_box and all(k in face_box for k in ['Left', 'Top', 'Width', 'Height']):
+                    # Convert relative coordinates to absolute pixels
+                    left = int(face_box['Left'] * current_frame_width)
+                    top = int(face_box['Top'] * current_frame_height)
+                    width = int(face_box['Width'] * current_frame_width)
+                    height = int(face_box['Height'] * current_frame_height)
+                    
+                    # Add padding and ensure coordinates are within frame bounds
+                    padding = 20
+                    x1 = max(0, left - padding)
+                    y1 = max(0, top - padding)
+                    x2 = min(current_frame_width, left + width + padding)
+                    y2 = min(current_frame_height, top + height + padding)
+                    
+                    # Extract and save face
+                    if x2 > x1 and y2 > y1:
+                        face_crop = frame[y1:y2, x1:x2]
+                        if face_crop.size > 0:  # Ensure face crop is not empty
+                            face_save_path = FACES_SAVE_DIR / f"celebrity_{celeb_id}.jpg"
+                            success = cv2.imwrite(str(face_save_path), face_crop)
+                            if success and face_save_path.exists():
+                                celeb_image_path = f"faces/celebrity_{celeb_id}.jpg"
+                            else:
+                                celeb_image_path = f"https://placehold.co/128x128/3b82f6/ffffff?text={celeb_name.replace(' ', '+')}"
+                        else:
+                            celeb_image_path = f"https://placehold.co/128x128/3b82f6/ffffff?text={celeb_name.replace(' ', '+')}"
+                    else:
+                        celeb_image_path = f"https://placehold.co/128x128/3b82f6/ffffff?text={celeb_name.replace(' ', '+')}"
+                else:
+                    celeb_image_path = f"https://placehold.co/128x128/3b82f6/ffffff?text={celeb_name.replace(' ', '+')}"
+
                 unique_celebrities[celeb_id] = {
                     "id": celeb_id,
                     "name": celeb_name,
-                    "image_path": celeb_image_url,
+                    "image_path": celeb_image_path,
                     "is_celebrity": True
                 }
 
+            # Convert bounding box to absolute coordinates for detection
+            if face_box:
+                left = int(face_box.get('Left', 0) * current_frame_width)
+                top = int(face_box.get('Top', 0) * current_frame_height)
+                width = int(face_box.get('Width', 0) * current_frame_width)
+                height = int(face_box.get('Height', 0) * current_frame_height)
+                location = [left, top, width, height]
+            else:
+                location = [0, 0, 0, 0]
+
             detections.append({
-                "frame": 0,
+                "frame": int(timestamp * video_fps) if video_fps > 0 else 0,
                 "time": round(timestamp, 2),
                 "face_id": celeb_id,
-                "location": [0, 0, 0, 0]
+                "location": location
             })
 
         cap.release()
@@ -280,4 +336,15 @@ async def get_known_faces_endpoint():
         return JSONResponse(content={"known_faces": []})
     return JSONResponse(content={"known_faces": known_face_names})
 
-app.mount("/faces", StaticFiles(directory=FACES_SAVE_DIR), name="faces")
+app.mount("/faces", StaticFiles(directory=str(FACES_SAVE_DIR)), name="faces")
+
+@app.get("/check-face/{face_filename}")
+async def check_face_endpoint(face_filename: str):
+    face_path = FACES_SAVE_DIR / face_filename
+    return JSONResponse(content={
+        "exists": face_path.exists(),
+        "path": str(face_path),
+        "size": face_path.stat().st_size if face_path.exists() else 0
+    })
+from fastapi.staticfiles import StaticFiles
+app.mount("/", StaticFiles(directory=str(FRONTEND_BUILD_DIR), html=True), name="frontend_static")

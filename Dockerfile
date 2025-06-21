@@ -1,43 +1,32 @@
-# Use a slim Python 3.12 image, as we don't have heavy compilation needs now.
-FROM python:3.12-slim-bookworm
+# Use Node.js to build the React frontend
+FROM node:18 as frontend
 
-# Install only essential system dependencies for OpenCV (basic video handling).
-# 'git' is not strictly needed for the app but useful for development environment.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libglib2.0-0 \
-    libsm6 \
-    libxrender1 \
-    libxext6 \
-    libgl1-mesa-glx \
-    libjpeg-dev \
-    libpng-dev \
-    libtiff-dev \
-    libavcodec-dev \
-    libavformat-dev \
-    libswscale-dev \
-    libv4l-dev \
-    git \
-&& rm -rf /var/lib/apt/lists/* \
-&& apt-get clean # cache_bust_demo_v2 - Trigger Railway cache bust for new image
+WORKDIR /frontend
 
-# Set the working directory inside the container.
+COPY frontend/ .
+
+RUN npm install && npm run build
+
+# ---- Backend stage ----
+FROM python:3.11-slim
+
 WORKDIR /app
 
-# Copy requirements.txt and upgrade pip
+# System dependencies for OpenCV
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    libgl1 \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
 COPY requirements.txt .
-RUN pip install --upgrade pip
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Install all Python dependencies from requirements.txt.
-RUN pip install -r requirements.txt
+# Copy backend code
+COPY backend/ .
 
-# Copy the rest of your application code into the container.
-COPY . .
+# Copy the frontend build from the previous stage
+COPY --from=frontend /frontend/build ./frontend/build
 
-# Ensure necessary directories exist for data storage at runtime
-RUN mkdir -p /app/data /app/known_faces /app/data/faces /app/data/temp_videos
-
-# Expose the port where the FastAPI application will be listening.
-EXPOSE 8000
-
-# Define the command to run the FastAPI application using Uvicorn.
-CMD ["python", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

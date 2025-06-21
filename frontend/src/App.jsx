@@ -16,7 +16,7 @@ function App() {
     const faceModalRef = useRef(null);
     const bootstrapModalInstance = useRef(null);
 
-    const API_BASE_URL = "https://test-production-7775.up.railway.app";
+    const API_BASE_URL = window.location.origin.replace(':3000', ':8000');
 
     useEffect(() => {
         if (window.bootstrap && faceModalRef.current) {
@@ -136,7 +136,7 @@ function App() {
             setCurrentResults(prevResults => {
                 if (!prevResults) return null;
                 const updatedUniqueFaces = prevResults.unique_faces.map(face =>
-                    face.id === selectedFaceForModal.id ? { ...face, name: newName, image_path: face.is_mock ? `https://placehold.co/128x128/FF5733/ffffff?text=${newName.replace(" ", "%20")}` : face.image_path } : face
+                    face.id === selectedFaceForModal.id ? { ...face, name: newName } : face
                 );
                 return { ...prevResults, unique_faces: updatedUniqueFaces };
             });
@@ -289,7 +289,10 @@ function App() {
                                                 src={face.image_path.startsWith('faces/') ? `${API_BASE_URL}/${face.image_path}` : face.image_path}
                                                 alt={face.name}
                                                 className="rounded-t-lg"
-                                                onError={(e) => { e.target.onerror = null; e.target.src = 'https://placehold.co/128x128/cccccc/ffffff?text=Error'; }}
+                                                onError={(e) => { 
+                                                    e.target.onerror = null; 
+                                                    e.target.src = `https://placehold.co/128x128/3b82f6/ffffff?text=${face.name.replace(' ', '+')}`; 
+                                                }}
                                             />
                                             <div className="face-card-body">
                                                 <p className="font-semibold text-gray-800">{face.name}</p>
@@ -373,7 +376,10 @@ function App() {
                                             src={selectedFaceForModal.image_path.startsWith('faces/') ? `${API_BASE_URL}/${selectedFaceForModal.image_path}` : selectedFaceForModal.image_path}
                                             alt="Detected Face"
                                             className="modal-face-img mx-auto"
-                                            onError={(e) => { e.target.onerror = null; e.target.src = 'https://placehold.co/150x150/cccccc/ffffff?text=Error'; }}
+                                            onError={(e) => { 
+                                                e.target.onerror = null; 
+                                                e.target.src = `https://placehold.co/150x150/3b82f6/ffffff?text=${selectedFaceForModal.name.replace(' ', '+')}`; 
+                                            }}
                                         />
                                     </div>
                                     <div className="mb-6">
