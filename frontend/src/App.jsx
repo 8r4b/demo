@@ -16,7 +16,7 @@ function App() {
     const faceModalRef = useRef(null);
     const bootstrapModalInstance = useRef(null);
 
-    const API_BASE_URL = 'http://localhost:8000';
+    const API_BASE_URL = "https://test-production-7775.up.railway.app";
 
     useEffect(() => {
         if (window.bootstrap && faceModalRef.current) {
