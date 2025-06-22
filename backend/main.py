@@ -54,7 +54,7 @@ DATA_DIR = BASE_DIR / "data"
 KNOWN_FACES_DIR = BASE_DIR / "known_faces"
 TEMP_VIDEO_DIR = DATA_DIR / "temp_videos"
 FACES_SAVE_DIR = DATA_DIR / "faces"
-FRONTEND_BUILD_DIR = BASE_DIR / "frontend" / "build"
+FRONTEND_BUILD_DIR = Path(__file__).parent.parent / "frontend" / "build"
 
 for directory in [DATA_DIR, KNOWN_FACES_DIR, TEMP_VIDEO_DIR, FACES_SAVE_DIR]:
     directory.mkdir(parents=True, exist_ok=True)
@@ -346,5 +346,4 @@ async def check_face_endpoint(face_filename: str):
         "path": str(face_path),
         "size": face_path.stat().st_size if face_path.exists() else 0
     })
-from fastapi.staticfiles import StaticFiles
 app.mount("/", StaticFiles(directory=str(FRONTEND_BUILD_DIR), html=True), name="frontend_static")
