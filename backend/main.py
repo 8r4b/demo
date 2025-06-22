@@ -295,6 +295,11 @@ async def add_known_face_endpoint(
         if temp_image_path.exists():
             temp_image_path.unlink()
 
+
+@app.get("/")
+async def root():
+    return {"message": "Backend API is running"}
+
 @app.get("/get-face-image/{image_path:path}")
 async def get_face_image_endpoint(image_path: str):
     if image_path.startswith("https://placehold.co/"):
