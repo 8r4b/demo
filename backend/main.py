@@ -346,4 +346,6 @@ async def check_face_endpoint(face_filename: str):
         "path": str(face_path),
         "size": face_path.stat().st_size if face_path.exists() else 0
     })
-app.mount("/", StaticFiles(directory=str(FRONTEND_BUILD_DIR), html=True), name="frontend_static")
+if FRONTEND_BUILD_DIR.exists():
+    app.mount("/", StaticFiles(directory=str(FRONTEND_BUILD_DIR), html=True), name="frontend_static")
+
