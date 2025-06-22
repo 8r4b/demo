@@ -315,6 +315,10 @@ async def get_face_image_endpoint(image_path: str):
     except Exception:
         return RedirectResponse("https://placehold.co/128x128/FF5733/ffffff?text=ERROR")
 
+@app.get("/test-cors")
+async def test_cors():
+    return {"message": "CORS is configured correctly"}
+
 @app.get("/get-results/{results_filename}")
 async def get_results_endpoint(results_filename: str):
     json_path = DATA_DIR / results_filename
