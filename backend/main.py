@@ -9,9 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
-import cv2
-from PIL import Image, ImageDraw, ImageFont # Added for creating dummy face images
-
+import cv2 # OpenCV is used for video processing and face cropping
 
 # --- Configuration and Setup ---
 
@@ -187,11 +185,11 @@ async def upload_video_endpoint(file: UploadFile = File(...)):
         cap = cv2.VideoCapture(str(temp_video_path))
         if not cap.isOpened():
             print("WARNING: Could not open video file with OpenCV for face extraction. Face images will be placeholders.")
-            # If video cannot be opened, unique_celebrities will use placeholder URLs
-            current_frame_width = 640 # Default or placeholder values
-            current_frame_height = 360
-            video_fps = frame_rate
             can_extract_faces = False
+            # Use placeholder values for frame dimensions if video can't be opened
+            current_frame_width = 640 
+            current_frame_height = 360
+            video_fps = frame_rate # Fallback to metadata fps
         else:
             current_frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             current_frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -205,7 +203,7 @@ async def upload_video_endpoint(file: UploadFile = File(...)):
             celeb_id = celebrity.get('Id')
             celeb_name = celebrity.get('Name', 'Unknown Celebrity')
             
-            # If Rekognition doesn't provide an ID (unlikely for celebrities, but good practice), generate one
+            # If Rekognition doesn't provide an ID, generate one based on name
             if not celeb_id:
                 celeb_id = str(uuid.uuid5(uuid.NAMESPACE_URL, celeb_name))
 
@@ -217,7 +215,8 @@ async def upload_video_endpoint(file: UploadFile = File(...)):
                 
                 if can_extract_faces and face_box and all(k in face_box for k in ['Left', 'Top', 'Width', 'Height']):
                     # Calculate frame number from timestamp
-                    frame_number = int(timestamp * video_fps)
+                    # Ensure frame_number is non-negative
+                    frame_number = max(0, int(timestamp * video_fps))
                     
                     # Set video position to the frame where celebrity was detected
                     cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
@@ -246,11 +245,11 @@ async def upload_video_endpoint(file: UploadFile = File(...)):
                                 if success and face_save_path.exists():
                                     celeb_image_path = f"/faces/{face_save_path.name}" # Path for frontend to access via /faces mount
                                 else:
-                                    print(f"Failed to save face image for {celeb_name}. Using placeholder.")
+                                    print(f"Failed to save face image for {celeb_name}. cv2.imwrite failed or file not found. Using placeholder.")
                             else:
                                 print(f"Empty face crop for {celeb_name}. Using placeholder.")
                         else:
-                            print(f"Invalid bounding box for {celeb_name}. Using placeholder.")
+                            print(f"Invalid bounding box coordinates after padding for {celeb_name}. Using placeholder.")
                     else:
                         print(f"Could not read frame {frame_number} for {celeb_name}. Using placeholder.")
                 
@@ -268,7 +267,6 @@ async def upload_video_endpoint(file: UploadFile = File(...)):
 
             # Prepare detection data
             # Rekognition returns normalized bounding box coordinates (0-1)
-            # The frontend might expect absolute pixels or normalized depending on its rendering logic.
             # Convert to absolute for 'location' field as per your original code's structure
             if face_box:
                 left = int(face_box.get('Left', 0) * current_frame_width)
@@ -437,20 +435,13 @@ async def get_face_image_endpoint(image_path: str):
     if image_path.startswith("https://placehold.co/"):
         return RedirectResponse(image_path)
     
-    # Check if the request is for a face image saved by the API (from FACES_SAVE_DIR)
-    # These are mounted at /faces, so the frontend would request e.g., /faces/celebrity_ID.jpg
-    # FastAPI's StaticFiles will handle this directly, so this endpoint might not be strictly needed for /faces
-    # if it's already mounted like: app.mount("/faces", StaticFiles(directory=str(FACES_SAVE_DIR)), name="faces")
-    
-    # Assuming this endpoint is primarily for known_faces or other S3-backed images not directly mounted
-    # For a path like 'known_faces/image_filename.jpg' or just 'image_filename.jpg' for known faces
-    # The frontend image_path for a known face could be just "known_face_ID.jpg" if you decide to serve them
-    # directly through this endpoint. Let's assume it expects just the filename for known_faces.
-    
-    # If the image_path itself needs to be an S3 key (e.g., "known_faces/some_image.jpg")
-    # or just the filename, adjust accordingly.
-    # For now, let's assume image_path from frontend is just the filename of a known face.
-    s3_object_key = f"known_faces/{Path(image_path).name}" # Assuming known faces are in a 'known_faces' prefix in S3
+    # Check if the path is specifically for a known_face from the KNOWN_FACES_DIR
+    # This assumes `image_path` coming from the frontend for known faces is just the filename,
+    # and we append the `known_faces/` prefix for S3.
+    # The /static/known_faces mount handles direct file serving from KNOWN_FACES_DIR.
+    # This endpoint is primarily useful if you store these in S3 and want presigned URLs.
+    # Example: if frontend asks for 'my_known_person.jpg' which is in S3 under 'known_faces/'
+    s3_object_key = f"known_faces/{Path(image_path).name}" 
 
     try:
         # Generate a presigned URL for secure, temporary access to the S3 object
@@ -491,7 +482,7 @@ async def get_results_endpoint(results_filename: str):
 async def get_known_faces_endpoint():
     """
     Retrieves a list of known faces (indexed in Rekognition collection)
-    along with their associated image paths (if available).
+     along with their associated image paths.
     """
     known_faces_data = []
     try:
@@ -502,15 +493,54 @@ async def get_known_faces_endpoint():
                 face_id = face_record.get('FaceId')
                 external_image_id = face_record.get('ExternalImageId', 'Unknown')
                 
-                # Assuming the external_image_id corresponds to the filename in KNOWN_FACES_DIR
-                # or a logical identifier for an S3 object.
-                # For simplicity, we'll try to link to a static path if the file exists locally
-                # or use a placeholder.
+                # Construct the path to the locally stored known face image
+                # Assuming 'ExternalImageId' matches the filename (e.g., 'JohnDoe.jpg')
+                # that was uploaded and saved to KNOWN_FACES_DIR
+                local_image_path = KNOWN_FACES_DIR / f"{external_image_id}{face_record.get('ImageId', '')}.jpg" # Add a placeholder for suffix if ImageId used for filename
                 
-                image_path = f"/static/known_faces/{external_image_id}.jpg" # Example if stored locally
-                # Check if this local static file actually exists, otherwise use a placeholder
-                if not (KNOWN_FACES_DIR / f"{external_image_id}.jpg").exists():
-                     # Fallback to a placeholder image if local file doesn't exist
+                # Check if the local file exists, otherwise use a placeholder
+                # Note: The `ExternalImageId` might not have a suffix. You might need a more robust way
+                # to store and retrieve suffixes if your `ExternalImageId` doesn't include it.
+                # For example, store `ExternalImageId` as just "John Doe" and save file as "known_face_JOHN_DOE_<UUID>.jpg"
+                
+                # A simpler approach: if you consistently save to KNOWN_FACES_DIR with a specific pattern
+                # during add_known_face_endpoint, you can construct that pattern here.
+                # Currently, `add_known_face_endpoint` uses `image_filename = f"known_face_{uuid.uuid4()}{Path(file.filename).suffix}"`
+                # and sets `ExternalImageId=name`. This means `ExternalImageId` is *not* the filename.
+                # To get the correct image path for a known face, you'd need to store the filename/path
+                # when you call `index_faces`, perhaps in a local database or a metadata file.
+                
+                # Given the current `add_known_face_endpoint`, the `ExternalImageId` is just the `name`.
+                # We need to find the actual filename in KNOWN_FACES_DIR or S3 if it's there.
+                
+                # For now, let's assume `ExternalImageId` can be used to construct a local file path
+                # or we fall back to a generic placeholder.
+                
+                # To make this truly functional with your `add_known_face` logic, you'd need to:
+                # 1. In `add_known_face_endpoint`, store the `image_filename` (like `known_face_uuid.jpg`)
+                #    along with the `ExternalImageId` (the `name`) in a separate mapping (e.g., a simple JSON file or database).
+                # 2. In `get_known_faces_endpoint`, retrieve this filename using the `ExternalImageId`
+                #    and construct the `/static/known_faces/{filename}` path.
+
+                # For now, we'll try to guess the filename or use a placeholder based on ExternalImageId
+                # A more robust solution requires storing the filename linked to ExternalImageId.
+                
+                # Let's assume for `add_known_face`, you pass `name="John Doe"` and `file` is `john_doe.jpg`.
+                # `add_known_face` saves it as `known_face_<uuid>.jpg` and sets `ExternalImageId=John Doe`.
+                # To retrieve, we'd have to search `KNOWN_FACES_DIR` for a file linked to "John Doe".
+                # This is a common challenge with Rekognition's index_faces.
+                
+                # TEMPORARY SOLUTION: Check if a file named after ExternalImageId (with common suffixes) exists
+                found_image = False
+                for suffix in ['.jpg', '.jpeg', '.png']: # Check common image suffixes
+                    temp_local_path = KNOWN_FACES_DIR / f"{external_image_id}{suffix}"
+                    if temp_local_path.exists():
+                        image_path = f"/static/known_faces/{temp_local_path.name}"
+                        found_image = True
+                        break
+                
+                if not found_image:
+                    # Fallback to a placeholder image if local file doesn't exist
                     image_path = f"https://placehold.co/128x128/3b82f6/ffffff?text={external_image_id.replace(' ', '+')}"
 
                 known_faces_data.append({
@@ -526,15 +556,11 @@ async def get_known_faces_endpoint():
         return JSONResponse(content={"known_faces": []}, status_code=500) # Return empty list on error
     return JSONResponse(content={"known_faces": known_faces_data})
 
-# @app.get("/")
-# async def root():
-#     return {"message": "Backend API is running"}
-# The above root endpoint is removed as the frontend serving one takes precedence.
-
 @app.get("/check-face/{face_filename}")
 async def check_face_endpoint(face_filename: str):
     """
     Checks if a specific face image (saved from video processing) exists locally.
+    This helps the frontend verify if a static image is available.
     """
     face_path = FACES_SAVE_DIR / face_filename
     return JSONResponse(content={
