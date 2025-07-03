@@ -3,43 +3,44 @@ import uuid
 import json
 from pathlib import Path
 import time
-import boto3  # Boto3 is back!
-
-from fastapi import FastAPI, UploadFile, File, HTTPException
+import boto3
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
+import cv2
+from PIL import Image, ImageDraw, ImageFont # Added for creating dummy face images
+
 
 # --- Configuration and Setup ---
 
 load_dotenv()
 
 app = FastAPI(
-    title="Video Celebrity Recognition API (AWS Rekognition)",
-    description="API for uploading videos, detecting and recognizing celebrities using AWS Rekognition.",
+    title="Video Face Recognition API (AWS Rekognition)",
+    description="API for uploading videos, detecting and recognizing faces using AWS Rekognition.",
     version="1.0.0"
 )
 
 app.add_middleware(
     CORSMiddleware,
-    # IMPORTANT: Change this for production!
-    # Example: allow_origins=["https://your-vercel-frontend-domain.vercel.app", "http://localhost:3000"]
-    allow_origins=["*"],
+    allow_origins=["*"], # IMPORTANT: Change this for production!
+                         # Example: allow_origins=["https://your-vercel-frontend-domain.vercel.app", "http://localhost:3000"]
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# --- AWS Configuration ---
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 AWS_REGION = os.getenv("AWS_REGION")
 S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
-REKOGNITION_COLLECTION_ID = os.getenv("REKOGNITION_COLLECTION_ID", "MyCelebrityFaces") # Default value
+REKOGNITION_COLLECTION_ID = os.getenv("REKOGNITION_COLLECTION_ID", "MyCelebrityFaces")
 
+# Ensure AWS credentials are loaded before initializing clients
 if not all([AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, S3_BUCKET_NAME]):
-    raise ValueError("Missing AWS environment variables. Please check your .env file.")
+    raise ValueError("Missing AWS environment variables. Please check your .env file and ensure AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, S3_BUCKET_NAME are set.")
 
 s3_client = boto3.client(
     's3',
@@ -54,12 +55,11 @@ rekognition_client = boto3.client(
     region_name=AWS_REGION
 )
 
-# --- Directory Setup ---
 BASE_DIR = Path(__file__).parent.parent
 DATA_DIR = BASE_DIR / "data"
-KNOWN_FACES_DIR = BASE_DIR / "known_faces" # This would be used if you had a separate "known faces" collection
+KNOWN_FACES_DIR = BASE_DIR / "known_faces" # For storing known face images (if you index them manually)
 TEMP_VIDEO_DIR = DATA_DIR / "temp_videos"
-FACES_SAVE_DIR = DATA_DIR / "faces" # For saving detected face crops from Rekognition results (optional, but good for frontend)
+FACES_SAVE_DIR = DATA_DIR / "faces" # For saving detected face crops from Rekognition results
 FRONTEND_BUILD_DIR = Path(__file__).parent.parent / "frontend" / "build"
 
 for directory in [DATA_DIR, KNOWN_FACES_DIR, TEMP_VIDEO_DIR, FACES_SAVE_DIR]:
@@ -67,7 +67,7 @@ for directory in [DATA_DIR, KNOWN_FACES_DIR, TEMP_VIDEO_DIR, FACES_SAVE_DIR]:
     print(f"Created/verified directory: {directory}")
 
 @app.on_event("startup")
-async def create_rekognition_collection_on_startup():
+async def create_rekognition_collection():
     """
     Checks if the Rekognition collection exists and creates it if not.
     This is useful for initial setup.
@@ -83,30 +83,22 @@ async def create_rekognition_collection_on_startup():
             print(f"Collection '{REKOGNITION_COLLECTION_ID}' already exists.")
     except Exception as e:
         print(f"Error checking/creating Rekognition collection: {e}")
-        # This error might happen if permissions are not set correctly for list_collections/create_collection
-        # The app can still proceed if the collection is manually created or not strictly needed
-        pass
+        # Log the full traceback for debugging in production environments
+        import traceback
+        traceback.print_exc()
+        pass # Allow the app to start even if collection creation fails
 
 def start_rekognition_celebrity_job(video_s3_key: str) -> str:
     """
     Starts an asynchronous Amazon Rekognition celebrity recognition job.
     """
-    try:
-        print(f"Starting Rekognition celebrity recognition job for s3://{S3_BUCKET_NAME}/{video_s3_key}")
-        response = rekognition_client.start_celebrity_recognition(
-            Video={'S3Object': {'Bucket': S3_BUCKET_NAME, 'Name': video_s3_key}}
-            # For real applications, consider adding NotificationChannel for SNS
-            # NotificationChannel={
-            #     'SNSTopicArn': 'arn:aws:sns:REGION:ACCOUNT_ID:TOPIC_NAME',
-            #     'RoleArn': 'arn:aws:iam::ACCOUNT_ID:role/REKOGNITION_SERVICE_ROLE'
-            # }
-        )
-        job_id = response['JobId']
-        print(f"Rekognition job started with JobId: {job_id}")
-        return job_id
-    except Exception as e:
-        print(f"Error starting Rekognition job: {e}")
-        raise
+    print(f"Starting Rekognition celebrity recognition job for s3://{S3_BUCKET_NAME}/{video_s3_key}")
+    response = rekognition_client.start_celebrity_recognition(
+        Video={'S3Object': {'Bucket': S3_BUCKET_NAME, 'Name': video_s3_key}}
+    )
+    job_id = response['JobId']
+    print(f"Rekognition job started with JobId: {job_id}")
+    return job_id
 
 def get_rekognition_job_results(job_id: str):
     """
@@ -115,28 +107,26 @@ def get_rekognition_job_results(job_id: str):
     status = ''
     print(f"Polling for Rekognition job {job_id} status...")
     while status not in ['SUCCEEDED', 'FAILED']:
-        time.sleep(5)  # Wait longer for video processing
-        try:
-            response = rekognition_client.get_celebrity_recognition(JobId=job_id)
-            status = response['JobStatus']
-            print(f"Job {job_id} status: {status}")
-        except Exception as e:
-            print(f"Error getting Rekognition job results for {job_id}: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to retrieve Rekognition job status: {e}")
+        time.sleep(5) # Wait longer for video processing in production
+        response = rekognition_client.get_celebrity_recognition(JobId=job_id)
+        status = response['JobStatus']
+        print(f"Job {job_id} status: {status}")
 
     if status == 'FAILED':
-        raise HTTPException(status_code=500, detail=f"Rekognition job {job_id} failed: {response.get('StatusMessage', 'Unknown error')}")
+        raise Exception(f"Rekognition job {job_id} failed: {response.get('StatusMessage', 'Unknown error')}")
     
     print(f"Rekognition job {job_id} SUCCEEDED. Returning results.")
     return response
 
-# --- Serve static files for known faces and the frontend ---
+# --- Serve static files ---
+# This serves any cropped face images saved to FACES_SAVE_DIR
+app.mount("/faces", StaticFiles(directory=str(FACES_SAVE_DIR)), name="faces")
+# This serves any known face images stored in KNOWN_FACES_DIR
 app.mount("/static/known_faces", StaticFiles(directory=KNOWN_FACES_DIR), name="known_faces_static")
-app.mount("/static/faces", StaticFiles(directory=FACES_SAVE_DIR), name="faces_static")
 
 # Serve the frontend build directory
 if FRONTEND_BUILD_DIR.is_dir():
-    app.mount("/", StaticFiles(directory=FRONTEND_BUILD_DIR, html=True), name="frontend")
+    app.mount("/", StaticFiles(directory=str(FRONTEND_BUILD_DIR), html=True), name="frontend_static")
     print(f"Serving frontend from: {FRONTEND_BUILD_DIR}")
 else:
     print(f"Frontend build directory not found: {FRONTEND_BUILD_DIR}. Frontend will not be served automatically.")
@@ -151,6 +141,9 @@ async def upload_video_endpoint(file: UploadFile = File(...)):
     temp_video_path = TEMP_VIDEO_DIR / video_filename
     video_s3_key = f"videos/{video_filename}" # Path in S3 bucket
 
+    # Initialize s3_object_created flag for cleanup in finally block
+    s3_object_created = False 
+
     try:
         # 1. Save uploaded video to a temporary local file
         print(f"Saving uploaded video to {temp_video_path}")
@@ -161,6 +154,7 @@ async def upload_video_endpoint(file: UploadFile = File(...)):
         # 2. Upload video to S3
         print(f"Uploading {temp_video_path} to s3://{S3_BUCKET_NAME}/{video_s3_key}")
         s3_client.upload_file(str(temp_video_path), S3_BUCKET_NAME, video_s3_key)
+        s3_object_created = True # Set flag if S3 upload succeeds
         print("Upload to S3 complete.")
 
         # 3. Start Rekognition Celebrity Recognition Job
@@ -171,101 +165,132 @@ async def upload_video_endpoint(file: UploadFile = File(...)):
 
         # --- Process Rekognition Results ---
         video_metadata = rekognition_results.get('VideoMetadata', {})
-        detections = []
-        unique_faces = {} # Use a dict to easily manage unique celebrities by ID
+        
+        # Ensure proper calculations for video_info
+        frame_rate = video_metadata.get('FrameRate', 0.0)
+        duration_millis = video_metadata.get('DurationMillis', 0)
+        calculated_duration_seconds = duration_millis / 1000.0
+        calculated_total_frames = int(calculated_duration_seconds * frame_rate) if frame_rate > 0 else 0
 
-        # Extract relevant video info
         video_info = {
-            "fps": video_metadata.get('FrameRate', 0.0),
-            "total_frames": video_metadata.get('FrameCount', 0),
+            "fps": float(frame_rate),
+            "total_frames": calculated_total_frames,
             "resolution": f"{video_metadata.get('CodecWidth', 0)}x{video_metadata.get('CodecHeight', 0)}",
-            "duration_seconds": video_metadata.get('DurationMillis', 0) / 1000.0
+            "duration_seconds": calculated_duration_seconds
         }
+        print(f"Video info extracted: {video_info}")
 
-        # Iterate through celebrity detections
-        for celeb_detection in rekognition_results.get('Celebrities', []):
-            timestamp_millis = celeb_detection.get('Timestamp', 0)
-            timestamp_seconds = timestamp_millis / 1000.0
+        detections = []
+        unique_celebrities = {}
 
-            celebrity_detail = celeb_detection.get('Celebrity', {})
-            face_detail = celebrity_detail.get('Face', {})
+        # Open video with OpenCV to extract frames for face cropping
+        cap = cv2.VideoCapture(str(temp_video_path))
+        if not cap.isOpened():
+            print("WARNING: Could not open video file with OpenCV for face extraction. Face images will be placeholders.")
+            # If video cannot be opened, unique_celebrities will use placeholder URLs
+            current_frame_width = 640 # Default or placeholder values
+            current_frame_height = 360
+            video_fps = frame_rate
+            can_extract_faces = False
+        else:
+            current_frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            current_frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            video_fps = cap.get(cv2.CAP_PROP_FPS)
+            can_extract_faces = True
+
+
+        for item in rekognition_results['Celebrities']:
+            timestamp = item['Timestamp'] / 1000.0
+            celebrity = item['Celebrity']
+            celeb_id = celebrity.get('Id')
+            celeb_name = celebrity.get('Name', 'Unknown Celebrity')
             
-            celeb_id = celebrity_detail.get('Id')
-            celeb_name = celebrity_detail.get('Name', 'Unknown Celebrity')
-            
+            # If Rekognition doesn't provide an ID (unlikely for celebrities, but good practice), generate one
             if not celeb_id:
-                # If Rekognition doesn't provide an ID, generate a unique one based on name
                 celeb_id = str(uuid.uuid5(uuid.NAMESPACE_URL, celeb_name))
 
-            # Store unique celebrity data
-            if celeb_id not in unique_faces:
-                unique_faces[celeb_id] = {
+            face_box = celebrity.get('Face', {}).get('BoundingBox', {})
+            
+            # Only process unique celebrities for image extraction
+            if celeb_id not in unique_celebrities:
+                celeb_image_path = None # Will store the final path for the frontend
+                
+                if can_extract_faces and face_box and all(k in face_box for k in ['Left', 'Top', 'Width', 'Height']):
+                    # Calculate frame number from timestamp
+                    frame_number = int(timestamp * video_fps)
+                    
+                    # Set video position to the frame where celebrity was detected
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+                    ret, frame = cap.read()
+                    
+                    if ret:
+                        # Convert relative coordinates to absolute pixels
+                        left = int(face_box['Left'] * current_frame_width)
+                        top = int(face_box['Top'] * current_frame_height)
+                        width = int(face_box['Width'] * current_frame_width)
+                        height = int(face_box['Height'] * current_frame_height)
+                        
+                        # Add padding and ensure coordinates are within frame bounds
+                        padding = 20 # Add some padding around the face
+                        x1 = max(0, left - padding)
+                        y1 = max(0, top - padding)
+                        x2 = min(current_frame_width, left + width + padding)
+                        y2 = min(current_frame_height, top + height + padding)
+                        
+                        # Extract and save face crop
+                        if x2 > x1 and y2 > y1:
+                            face_crop = frame[y1:y2, x1:x2]
+                            if face_crop.size > 0:  # Ensure face crop is not empty
+                                face_save_path = FACES_SAVE_DIR / f"celebrity_{celeb_id}.jpg"
+                                success = cv2.imwrite(str(face_save_path), face_crop)
+                                if success and face_save_path.exists():
+                                    celeb_image_path = f"/faces/{face_save_path.name}" # Path for frontend to access via /faces mount
+                                else:
+                                    print(f"Failed to save face image for {celeb_name}. Using placeholder.")
+                            else:
+                                print(f"Empty face crop for {celeb_name}. Using placeholder.")
+                        else:
+                            print(f"Invalid bounding box for {celeb_name}. Using placeholder.")
+                    else:
+                        print(f"Could not read frame {frame_number} for {celeb_name}. Using placeholder.")
+                
+                # If image extraction failed or was not possible, use a placeholder
+                if celeb_image_path is None:
+                    # Replace spaces with '+' for URL compatibility
+                    celeb_image_path = f"https://placehold.co/128x128/3b82f6/ffffff?text={celeb_name.replace(' ', '+')}"
+
+                unique_celebrities[celeb_id] = {
                     "id": celeb_id,
                     "name": celeb_name,
-                    "image_path": f"https://s3.{AWS_REGION}.amazonaws.com/{S3_BUCKET_NAME}/{video_s3_key}", # Point to the video itself as a placeholder or generate separate images
+                    "image_path": celeb_image_path,
                     "is_celebrity": True
                 }
-                # If you want to save cropped faces from the video for the frontend:
-                # This would require downloading the video locally and using OpenCV to crop
-                # which would make the processing slower and defeat the purpose of offloading to Rekognition.
-                # For now, we'll just link back to the video or a generic placeholder.
-                # A more advanced approach would be to extract a frame and crop it, then upload that crop to S3.
-                # For this example, we'll use a placeholder or link back to the video.
 
-                # Simplified: Let's create a placeholder image path for each unique celebrity for the frontend
-                # In a real scenario, you might get a representative image from Rekognition or upload one yourself.
-                # Here, we'll generate one and store it in FACES_SAVE_DIR
-                face_image_filename = f"celeb_{celeb_id}.jpg"
-                face_image_path = FACES_SAVE_DIR / face_image_filename
-                
-                # --- This part would require image processing to actually save a face crop ---
-                # For a true implementation, you'd download the video, find the frame,
-                # crop the face based on bounding box, and save it.
-                # For now, we'll create a dummy file to ensure the static path works.
-                try:
-                    # Create a dummy image file if it doesn't exist to simulate a saved face
-                    if not face_image_path.exists():
-                        from PIL import Image, ImageDraw, ImageFont
-                        # Create a simple placeholder image
-                        img = Image.new('RGB', (128, 128), color = (70, 130, 180)) # SteelBlue
-                        d = ImageDraw.Draw(img)
-                        try:
-                            # Try to use a default font if available
-                            font = ImageFont.truetype("arial.ttf", 15)
-                        except IOError:
-                            font = ImageFont.load_default() # Fallback
-                        text = f"{celeb_name[:10]}..." if len(celeb_name) > 10 else celeb_name
-                        d.text((10,50), text, fill=(255,255,255), font=font)
-                        img.save(str(face_image_path))
-                except ImportError:
-                    print("Pillow not installed. Cannot create dummy face images. Install with 'pip install Pillow'")
-                    # Fallback to a placeholder URL if Pillow isn't available
-                    unique_faces[celeb_id]["image_path"] = f"https://placehold.co/128x128/3b82f6/ffffff?text={celeb_name.replace(' ', '+')}"
+            # Prepare detection data
+            # Rekognition returns normalized bounding box coordinates (0-1)
+            # The frontend might expect absolute pixels or normalized depending on its rendering logic.
+            # Convert to absolute for 'location' field as per your original code's structure
+            if face_box:
+                left = int(face_box.get('Left', 0) * current_frame_width)
+                top = int(face_box.get('Top', 0) * current_frame_height)
+                width = int(face_box.get('Width', 0) * current_frame_width)
+                height = int(face_box.get('Height', 0) * current_frame_height)
+                location = [left, top, width, height]
+            else:
+                location = [0, 0, 0, 0] # Default if no face box
 
-                unique_faces[celeb_id]["image_path"] = f"/static/faces/{face_image_filename}"
-
-
-            # Add detection details
             detections.append({
-                "Timestamp": timestamp_seconds,
-                "FrameIndex": int(timestamp_seconds * video_metadata.get('FrameRate', 0)), # Approximate frame index
-                "Face": {
-                    "BoundingBox": face_detail.get('BoundingBox', {}),
-                    "Confidence": face_detail.get('Confidence', 0),
-                    "FaceId": celeb_id, # Link to the unique celebrity
-                    "ImageId": str(uuid.uuid4()) # Unique ID for this specific detection event
-                },
-                "Celebrity": {
-                    "Name": celeb_name,
-                    "Urls": celebrity_detail.get('Urls', []),
-                    "Id": celeb_id,
-                    "Confidence": celebrity_detail.get('MatchConfidence', celebrity_detail.get('Confidence', 0)),
-                    "KnownGender": celebrity_detail.get('KnownGender', {"Type": "Unknown"}) # Rekognition provides this
-                }
+                "frame": int(timestamp * video_fps) if video_fps > 0 else 0,
+                "time": round(timestamp, 2),
+                "face_id": celeb_id, # Link to the unique celebrity
+                "location": location
             })
+            
+        if can_extract_faces: # Only release if successfully opened
+            cap.release()
+            cv2.destroyAllWindows() # Close any OpenCV windows if opened (though typically not needed for video processing without display)
 
-        unique_faces_list = list(unique_faces.values())
-
+        unique_faces_list = list(unique_celebrities.values())
         results_filename = f"results_{uuid.uuid4()}.json"
         results_path = DATA_DIR / results_filename
 
@@ -280,7 +305,7 @@ async def upload_video_endpoint(file: UploadFile = File(...)):
 
         return JSONResponse(content={
             "status": "success",
-            "message": "Video uploaded and processed by AWS Rekognition.",
+            "message": "Video processed successfully with AWS Rekognition for celebrities.",
             "results_filename": results_filename,
             "video_info": full_results["video_info"],
             "unique_faces": full_results["unique_faces"]
@@ -289,12 +314,13 @@ async def upload_video_endpoint(file: UploadFile = File(...)):
     except Exception as e:
         print(f"Error during video processing: {e}")
         import traceback
-        traceback.print_exc()
-        # Clean up S3 object if upload succeeded but Rekognition failed
-        if 'video_s3_key' in locals():
+        traceback.print_exc() # Print full traceback for debugging
+
+        # Clean up S3 object if it was uploaded successfully
+        if s3_object_created:
             try:
                 s3_client.delete_object(Bucket=S3_BUCKET_NAME, Key=video_s3_key)
-                print(f"Cleaned up S3 object: {video_s3_key}")
+                print(f"Cleaned up S3 object: s3://{S3_BUCKET_NAME}/{video_s3_key}")
             except Exception as s3_e:
                 print(f"Error during S3 cleanup: {s3_e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
@@ -308,23 +334,211 @@ async def upload_video_endpoint(file: UploadFile = File(...)):
                 print(f"Error deleting temporary video file {temp_video_path}: {e}")
                 pass
 
-@app.get("/results/{results_filename}")
-async def get_results(results_filename: str):
-    results_path = DATA_DIR / results_filename
-    if not results_path.exists():
+@app.post("/update-face")
+async def update_face_endpoint(
+    face_id: str = Form(...),
+    new_name: str = Form(...),
+    results_filename: str = Form(...)
+):
+    json_path = DATA_DIR / results_filename
+    if not json_path.exists():
         raise HTTPException(status_code=404, detail="Results file not found.")
+
+    try:
+        with open(json_path, "r+") as f:
+            results = json.load(f)
+            found_face = False
+            for face in results["unique_faces"]:
+                if face["id"] == face_id:
+                    face["name"] = new_name
+                    # When updating a face name, it's common to update its placeholder image as well
+                    face["image_path"] = f"https://placehold.co/128x128/3b82f6/ffffff?text={new_name.replace(' ', '+')}"
+                    found_face = True
+                    break
+            if not found_face:
+                raise HTTPException(status_code=404, detail=f"Face with ID {face_id} not found in results file.")
+            f.seek(0) # Go to the beginning of the file to overwrite
+            json.dump(results, f, indent=2)
+            f.truncate() # Remove remaining part if new content is shorter
+        return JSONResponse(content={"status": "success", "message": "Face name updated successfully."})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
+
+@app.post("/add-known-face")
+async def add_known_face_endpoint(
+    name: str = Form(...),
+    file: UploadFile = File(...)
+):
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No image file provided.")
+
+    image_filename = f"known_face_{uuid.uuid4()}{Path(file.filename).suffix}"
+    temp_image_path = KNOWN_FACES_DIR / image_filename
+    image_s3_key = f"known_faces/{image_filename}" # Path in S3 bucket for known faces
+
+    try:
+        contents = await file.read()
+        with open(temp_image_path, "wb") as buffer:
+            buffer.write(contents)
+        
+        # Upload the known face image to S3
+        s3_client.upload_file(str(temp_image_path), S3_BUCKET_NAME, image_s3_key)
+        print(f"Uploaded known face image {name} to s3://{S3_BUCKET_NAME}/{image_s3_key}")
+
+        # Index the face in Rekognition collection
+        response = rekognition_client.index_faces(
+            CollectionId=REKOGNITION_COLLECTION_ID,
+            Image={'S3Object': {'Bucket': S3_BUCKET_NAME, 'Name': image_s3_key}},
+            ExternalImageId=name, # This name will be associated with the face in the collection
+            DetectionAttributes=['ALL']
+        )
+        
+        if not response['FaceRecords']:
+            # If no face was detected by Rekognition, delete from S3 and raise error
+            s3_client.delete_object(Bucket=S3_BUCKET_NAME, Key=image_s3_key)
+            raise HTTPException(status_code=422, detail="No face detected in the uploaded image by Rekognition.")
+        
+        print(f"Face for '{name}' indexed successfully in Rekognition.")
+        return JSONResponse(content={"status": "success", "message": f"Known face '{name}' added successfully to Rekognition collection."})
+    except Exception as e:
+        print(f"Error adding known face: {e}")
+        import traceback
+        traceback.print_exc()
+        # Clean up local temp file and S3 object if something went wrong
+        if temp_image_path.exists():
+            try:
+                temp_image_path.unlink()
+            except Exception:
+                pass
+        try:
+            s3_client.delete_object(Bucket=S3_BUCKET_NAME, Key=image_s3_key)
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
+    finally:
+        # Ensure temporary local file is deleted
+        if temp_image_path.exists():
+            try:
+                temp_image_path.unlink()
+            except Exception:
+                pass
+
+
+@app.get("/get-face-image/{image_path:path}")
+async def get_face_image_endpoint(image_path: str):
+    """
+    Handles requests for face images.
+    If it's a placeholder URL, redirects directly.
+    If it's a local static file (from FACES_SAVE_DIR), the /faces mount will handle it.
+    If it's a known_face from S3, generates a presigned URL.
+    """
+    if image_path.startswith("https://placehold.co/"):
+        return RedirectResponse(image_path)
     
-    with open(results_path, "r") as f:
-        results = json.load(f)
-    return JSONResponse(content=results)
+    # Check if the request is for a face image saved by the API (from FACES_SAVE_DIR)
+    # These are mounted at /faces, so the frontend would request e.g., /faces/celebrity_ID.jpg
+    # FastAPI's StaticFiles will handle this directly, so this endpoint might not be strictly needed for /faces
+    # if it's already mounted like: app.mount("/faces", StaticFiles(directory=str(FACES_SAVE_DIR)), name="faces")
+    
+    # Assuming this endpoint is primarily for known_faces or other S3-backed images not directly mounted
+    # For a path like 'known_faces/image_filename.jpg' or just 'image_filename.jpg' for known faces
+    # The frontend image_path for a known face could be just "known_face_ID.jpg" if you decide to serve them
+    # directly through this endpoint. Let's assume it expects just the filename for known_faces.
+    
+    # If the image_path itself needs to be an S3 key (e.g., "known_faces/some_image.jpg")
+    # or just the filename, adjust accordingly.
+    # For now, let's assume image_path from frontend is just the filename of a known face.
+    s3_object_key = f"known_faces/{Path(image_path).name}" # Assuming known faces are in a 'known_faces' prefix in S3
 
-@app.get("/")
-async def read_root():
-    """
-    Redirects to the frontend's index.html if the frontend build directory exists.
-    """
-    if FRONTEND_BUILD_DIR.is_dir():
-        return RedirectResponse(url="/index.html")
-    return JSONResponse(content={"message": "Welcome to the Video Face API! Frontend not found locally."})
+    try:
+        # Generate a presigned URL for secure, temporary access to the S3 object
+        url = s3_client.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': S3_BUCKET_NAME, 'Key': s3_object_key},
+            ExpiresIn=3600 # URL valid for 1 hour
+        )
+        print(f"Generated presigned URL for S3 object {s3_object_key}: {url}")
+        return RedirectResponse(url)
+    except Exception as e:
+        print(f"Error generating presigned URL for {s3_object_key}: {e}")
+        import traceback
+        traceback.print_exc()
+        # Fallback to an error placeholder image
+        return RedirectResponse("https://placehold.co/128x128/FF5733/ffffff?text=ERROR")
 
-```
+
+@app.get("/test-cors")
+async def test_cors():
+    return {"message": "CORS is configured correctly"}
+
+@app.get("/get-results/{results_filename}")
+async def get_results_endpoint(results_filename: str):
+    json_path = DATA_DIR / results_filename
+    if not json_path.exists():
+        raise HTTPException(status_code=404, detail="Results file not found.")
+    try:
+        with open(json_path, "r") as f:
+            results_data = json.load(f)
+        return JSONResponse(content=results_data)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
+
+@app.get("/get-known-faces")
+async def get_known_faces_endpoint():
+    """
+    Retrieves a list of known faces (indexed in Rekognition collection)
+    along with their associated image paths (if available).
+    """
+    known_faces_data = []
+    try:
+        paginator = rekognition_client.get_paginator('list_faces')
+        pages = paginator.paginate(CollectionId=REKOGNITION_COLLECTION_ID)
+        for page in pages:
+            for face_record in page['Faces']:
+                face_id = face_record.get('FaceId')
+                external_image_id = face_record.get('ExternalImageId', 'Unknown')
+                
+                # Assuming the external_image_id corresponds to the filename in KNOWN_FACES_DIR
+                # or a logical identifier for an S3 object.
+                # For simplicity, we'll try to link to a static path if the file exists locally
+                # or use a placeholder.
+                
+                image_path = f"/static/known_faces/{external_image_id}.jpg" # Example if stored locally
+                # Check if this local static file actually exists, otherwise use a placeholder
+                if not (KNOWN_FACES_DIR / f"{external_image_id}.jpg").exists():
+                     # Fallback to a placeholder image if local file doesn't exist
+                    image_path = f"https://placehold.co/128x128/3b82f6/ffffff?text={external_image_id.replace(' ', '+')}"
+
+                known_faces_data.append({
+                    "id": face_id, # Rekognition's internal FaceId
+                    "name": external_image_id, # The name you gave it
+                    "image_path": image_path,
+                    "is_celebrity": False # These are "known" faces, not necessarily "celebrities"
+                })
+    except Exception as e:
+        print(f"Error getting known faces: {e}")
+        import traceback
+        traceback.print_exc()
+        return JSONResponse(content={"known_faces": []}, status_code=500) # Return empty list on error
+    return JSONResponse(content={"known_faces": known_faces_data})
+
+# @app.get("/")
+# async def root():
+#     return {"message": "Backend API is running"}
+# The above root endpoint is removed as the frontend serving one takes precedence.
+
+@app.get("/check-face/{face_filename}")
+async def check_face_endpoint(face_filename: str):
+    """
+    Checks if a specific face image (saved from video processing) exists locally.
+    """
+    face_path = FACES_SAVE_DIR / face_filename
+    return JSONResponse(content={
+        "exists": face_path.exists(),
+        "path": str(face_path),
+        "size": face_path.stat().st_size if face_path.exists() else 0
+    })
