@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 import cv2
 
 # --- Configuration and Setup ---
-
+env_path = Path(__file__).resolve().parent.parent / '.env'
 load_dotenv()
 
 app = FastAPI(
