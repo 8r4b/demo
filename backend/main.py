@@ -15,11 +15,8 @@ from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 import cv2 # Essential for video processing (reading frames, getting metadata)
 
-# --- Logging Configuration ---
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+# --- Configuration and Setup ---
 
-# --- Load Environment Variables ---
 load_dotenv()
 
 # --- FastAPI App Initialization ---
@@ -238,64 +235,47 @@ async def upload_video_endpoint(file: UploadFile = File(..., description="Video 
 
         # Iterate through celebrity detections
         for item in rekognition_results['Celebrities']:
-            timestamp_millis = item.get('Timestamp', 0)
-            timestamp_seconds = timestamp_millis / 1000.0
-            celebrity = item.get('Celebrity', {})
-
-            celeb_id = celebrity.get('Id')
-            celeb_name = celebrity.get('Name', 'Unknown Celebrity')
+            timestamp = item['Timestamp'] / 1000.0
+            celebrity = item['Celebrity']
+            celeb_id = celebrity['Id']
+            celeb_name = celebrity['Name']
+            
+            # Get face bounding box from Rekognition
             face_box = celebrity.get('Face', {}).get('BoundingBox', {})
-
-            # If Rekognition doesn't provide an ID, generate a unique one based on name (should not happen for celebs)
-            if not celeb_id:
-                celeb_id = str(uuid.uuid5(uuid.NAMESPACE_URL, celeb_name))
-
-            # Store unique celebrity data and get a representative image path
+            
+            # Extract face image if we haven't saved one for this celebrity yet
+            celeb_image_path = f"faces/celebrity_{celeb_id}.jpg"
+            
             if celeb_id not in unique_celebrities:
-                face_image_s3_key = f"extracted_faces/{celeb_id}.jpg" # S3 key for this extracted face
-
-                # Extract and upload face image to S3
-                if face_box and all(k in face_box for k in ['Left', 'Top', 'Width', 'Height']):
-                    frame_number = int(timestamp_seconds * video_fps)
-                    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
-                    ret, frame = cap.read()
-
-                    if ret:
-                        # Convert relative coordinates to absolute pixels
-                        left = int(face_box['Left'] * current_frame_width)
-                        top = int(face_box['Top'] * current_frame_height)
-                        width = int(face_box['Width'] * current_frame_width)
-                        height = int(face_box['Height'] * current_frame_height)
-
-                        # Add a small padding around the face to get a better crop
-                        padding = 20
-                        x1 = max(0, left - padding)
-                        y1 = max(0, top - padding)
-                        x2 = min(current_frame_width, left + width + padding)
-                        y2 = min(current_frame_height, top + height + padding)
-
-                        if x2 > x1 and y2 > y1:
-                            face_crop = frame[y1:y2, x1:x2]
-                            if face_crop.size > 0: # Ensure face crop is not empty
-                                # Save crop to a temporary file locally before uploading to S3
-                                temp_face_crop_path = TEMP_VIDEO_DIR / f"celeb_crop_{celeb_id}.jpg"
-                                success = cv2.imwrite(str(temp_face_crop_path), face_crop)
-                                if success and temp_face_crop_path.exists():
-                                    try:
-                                        s3_client.upload_file(str(temp_face_crop_path), S3_BUCKET_NAME, face_image_s3_key)
-                                        uploaded_face_keys.append(face_image_s3_key)
-                                        logger.info(f"Uploaded extracted face for {celeb_name} to S3: {face_image_s3_key}")
-                                        # The frontend will call /get-face-image with this key
-                                        celeb_image_url_for_frontend = f"/get-face-image?s3_key={face_image_s3_key}"
-                                    except Exception as s3_upload_e:
-                                        logger.error(f"Failed to upload face crop to S3 for {celeb_name}: {s3_upload_e}", exc_info=True)
-                                        celeb_image_url_for_frontend = f"https://placehold.co/128x128/FF0000/FFFFFF?text=Error" # Placeholder for error
-                                    finally:
-                                        if temp_face_crop_path.exists(): # Clean up local temp face crop
-                                            temp_face_crop_path.unlink()
-                                else:
-                                    logger.warning(f"Failed to save temporary face image for {celeb_name}. Using error placeholder.")
-                                    celeb_image_url_for_frontend = f"https://placehold.co/128x128/FF0000/FFFFFF?text=Error"
+                # Calculate frame number from timestamp
+                frame_number = int(timestamp * video_fps)
+                
+                # Set video position to the frame where celebrity was detected
+                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+                ret, frame = cap.read()
+                
+                if ret and face_box and all(k in face_box for k in ['Left', 'Top', 'Width', 'Height']):
+                    # Convert relative coordinates to absolute pixels
+                    left = int(face_box['Left'] * current_frame_width)
+                    top = int(face_box['Top'] * current_frame_height)
+                    width = int(face_box['Width'] * current_frame_width)
+                    height = int(face_box['Height'] * current_frame_height)
+                    
+                    # Add padding and ensure coordinates are within frame bounds
+                    padding = 20
+                    x1 = max(0, left - padding)
+                    y1 = max(0, top - padding)
+                    x2 = min(current_frame_width, left + width + padding)
+                    y2 = min(current_frame_height, top + height + padding)
+                    
+                    # Extract and save face
+                    if x2 > x1 and y2 > y1:
+                        face_crop = frame[y1:y2, x1:x2]
+                        if face_crop.size > 0:  # Ensure face crop is not empty
+                            face_save_path = FACES_SAVE_DIR / f"celebrity_{celeb_id}.jpg"
+                            success = cv2.imwrite(str(face_save_path), face_crop)
+                            if success and face_save_path.exists():
+                                celeb_image_path = f"faces/celebrity_{celeb_id}.jpg"
                             else:
                                 logger.warning(f"Empty face crop for {celeb_name}. Using error placeholder.")
                                 celeb_image_url_for_frontend = f"https://placehold.co/128x128/FF0000/FFFFFF?text=Error"
@@ -510,18 +490,12 @@ async def add_known_face_endpoint(
                 logger.error(f"Error deleting temporary file {temp_image_path}: {e}")
 
 
-@app.get("/get-face-image", summary="Serve an extracted or known face image from S3.")
-async def get_face_image_endpoint(s3_key: str):
-    """
-    Generates a presigned URL for an image stored in S3, allowing the frontend
-    to directly access the image securely.
-    The `s3_key` should be the full S3 object key (e.g., "extracted_faces/celeb_ID.jpg" or "known_faces/image_ID.jpg").
-    """
-    if not s3_key:
-        raise HTTPException(status_code=400, detail="Missing S3 key for image.")
-
+@app.get("/get-face-image/{image_path:path}")
+async def get_face_image_endpoint(image_path: str):
+    if image_path.startswith("https://placehold.co/"):
+        return RedirectResponse(image_path)
+    s3_object_key = f"known_faces/{Path(image_path).name}"
     try:
-        # Generate a presigned URL for secure, temporary access to the S3 object
         url = s3_client.generate_presigned_url(
             'get_object',
             Params={'Bucket': S3_BUCKET_NAME, 'Key': s3_key},
@@ -542,7 +516,7 @@ async def get_face_image_endpoint(s3_key: str):
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
 
 
-@app.get("/get-results/{results_filename}", summary="Retrieve full processing results from a stored JSON file.")
+@app.get("/get-results/{results_filename}")
 async def get_results_endpoint(results_filename: str):
     """
     Retrieves the JSON results file generated by a previous video processing task.
@@ -576,76 +550,21 @@ async def get_known_faces_endpoint():
         pages = paginator.paginate(CollectionId=REKOGNITION_COLLECTION_ID)
         
         for page in pages:
-            for face_record in page['Faces']:
-                face_id = face_record.get('FaceId')
-                # ExternalImageId is what we passed when indexing the face (the name of the person)
-                external_image_id = face_record.get('ExternalImageId', 'Unknown').replace("_", " ") # Clean up name
-                
-                # Construct the S3 key for the image based on how it was uploaded in add_known_face
-                # Assuming 'known_faces/filename.jpg' and filename matches external_image_id + extension
-                # This needs careful alignment between add_known_face and get_known_faces.
-                # For simplicity, we'll try to guess a common extension or link to our endpoint.
-                
-                # A more robust way: when indexing a face, store the S3 key in a database associated with face_id.
-                # Since we don't have a DB here, we'll assume the external_image_id itself helps locate the S3 image.
-                # If ExternalImageId is "John Doe" and S3 key is "known_faces/known_face_UUID.jpg",
-                # this linking won't work automatically.
-                #
-                # Re-evaluating: In `add_known_face`, we generated `image_s3_key` as `f"known_faces/{image_filename}"`.
-                # We need to retrieve that exact `image_filename` to construct the S3 key here.
-                # Rekognition's `ExternalImageId` is just the `name`.
-                #
-                # To make this work without a database:
-                # 1. When adding a known face, ensure `ExternalImageId` *is* the full S3_KEY. (Not recommended)
-                # 2. Or, for this demo, assume the image_path will be generated by calling `/get-face-image` with
-                #    a key based on the `ExternalImageId` (which might not be the actual S3 key).
-                #
-                # The best immediate fix for a demo: change add_known_face to use ExternalImageId as the filename base,
-                # then list_faces can reconstruct the S3 key.
-                # For now, let's assume the frontend will call /get-face-image with a well-known S3 key format.
-                
-                # The image_path to pass to the frontend will be a URL to our /get-face-image endpoint,
-                # which will then generate a presigned URL to the *actual* S3 object.
-                # We need a way to link the Rekognition FaceId/ExternalImageId back to its original S3 key.
-                # If `add_known_face` stores the image as `known_faces/known_face_UUID.jpg` and `ExternalImageId` is 'PersonName',
-                # then `list_faces` will only give us 'PersonName'. We lose the UUID.
-                #
-                # A quick fix for this demo *without a database* is to use a predictable S3 key for known faces.
-                # Let's say `add_known_face` uploads as `known_faces/{name_cleaned}.jpg`.
-                
-                # If you use the full UUID + name in ExternalImageId, you can extract it.
-                # For now, we'll construct a *potential* S3 key and use our endpoint.
-                
-                # Assuming the image S3 key for a known face would be `known_faces/rekognition_face_id.jpg`
-                # or `known_faces/external_image_id.jpg` (if external_image_id is truly unique filename).
-                # Let's use `known_faces/face_id.jpg` as the convention for this demo.
-                s3_image_key_for_known_face = f"known_faces/{face_id}.jpg" 
-                # This means when you add a known face, you should upload it with an S3 key based on the face_id returned by index_faces.
-                # Or, store this mapping in a simple local JSON if you absolutely cannot use a DB.
-                # For this implementation, I'm modifying `add_known_face` to use the Rekognition FaceId for the S3 key.
-                
-                image_url_for_frontend = f"/get-face-image?s3_key={s3_image_key_for_known_face}"
+            for face in page['Faces']:
+                if 'ExternalImageId' in face:
+                    known_face_names.append(face['ExternalImageId'])
+    except Exception:
+        return JSONResponse(content={"known_faces": []})
+    return JSONResponse(content={"known_faces": known_face_names})
 
-                known_faces_data.append({
-                    "id": face_id, # Rekognition's internal FaceId
-                    "name": external_image_id, # The name you gave it
-                    "image_path": image_url_for_frontend,
-                    "is_celebrity": False # These are "known" faces for identification, not necessarily "celebrities"
-                })
-    except Exception as e:
-        logger.error(f"Error getting known faces from Rekognition collection: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve known faces: {e}")
-    
-    return JSONResponse(content={"known_faces": known_faces_data})
+app.mount("/faces", StaticFiles(directory=str(FACES_SAVE_DIR)), name="faces")
 
-
-@app.get("/test-cors", summary="A simple endpoint to test CORS configuration.")
-async def test_cors():
-    return {"message": "CORS is configured correctly"}
-
-# Root endpoint (optional, might be overridden by frontend serving)
-@app.get("/", include_in_schema=False) # Exclude from OpenAPI docs
-async def read_root():
-    # This endpoint will likely be overridden by your Vercel frontend.
-    # If the backend is accessed directly, it provides a simple message.
-    return {"message": "Welcome to the Video Celebrity Recognition API!"}
+@app.get("/check-face/{face_filename}")
+async def check_face_endpoint(face_filename: str):
+    face_path = FACES_SAVE_DIR / face_filename
+    return JSONResponse(content={
+        "exists": face_path.exists(),
+        "path": str(face_path),
+        "size": face_path.stat().st_size if face_path.exists() else 0
+    })
+app.mount("/", StaticFiles(directory=str(FRONTEND_BUILD_DIR), html=True), name="frontend_static")
