@@ -32,17 +32,23 @@ app = FastAPI(
 # --- CORS Configuration ---
 # Get allowed origins from environment variable.
 # For production, this MUST be updated on Render to your Vercel frontend's URL (e.g., "https://your-frontend.vercel.app").
-ALLOWED_ORIGINS_STR = os.getenv("ALLOWED_ORIGINS", "*")
-ALLOWED_ORIGINS = ALLOWED_ORIGINS_STR.split(',') # Allows comma-separated list of origins
+# --- CORS Configuration ---
+# Get allowed origins from environment variable.
+# --- CORS Configuration ---
+# Get allowed origins from environment variable.
+# --- CORS Configuration ---
+# Get allowed origins from environment variable.
+ALLOWED_ORIGINS_STR = os.getenv("ALLOWED_ORIGINS", "")
+ALLOWED_ORIGINS = ALLOWED_ORIGINS_STR.split(",") if ALLOWED_ORIGINS_STR else []
 
 logger.info(f"CORS allowed origins: {ALLOWED_ORIGINS}")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origins=["https://demo-seven-psi.vercel.app"],
     allow_credentials=True,
-    allow_methods=["*"], # Allows all HTTP methods (GET, POST, PUT, DELETE, etc.)
-    allow_headers=["*"], # Allows all headers
+    allow_methods=["*"],  # Allows all HTTP methods (GET, POST, PUT, DELETE, etc.)
+    allow_headers=["*"],  # Allows all headers
 )
 
 # --- AWS Configuration ---
@@ -341,7 +347,7 @@ async def upload_video_endpoint(file: UploadFile = File(..., description="Video 
             })
 
         cap.release() # Release the video capture object
-        cv2.destroyAllWindows() # Close any OpenCV windows if opened (though not typically for server)
+        cv2.destroyAll_windows() # Close any OpenCV windows if opened (though not typically for server)
 
         # Structure final results
         full_results = {
