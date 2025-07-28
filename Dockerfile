@@ -22,8 +22,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Set the working directory inside the container
 WORKDIR /app
 
-# Copy requirements.txt and upgrade pip
-COPY requirements.txt .
+# Copy the requirements.txt from the backend folder
+COPY backend/requirements.txt .
+
+# Upgrade pip
 RUN pip install --upgrade pip
 
 # Install all Python dependencies from requirements.txt
